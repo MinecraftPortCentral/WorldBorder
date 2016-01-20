@@ -1,5 +1,8 @@
 package com.wimbli.WorldBorder;
 
+import org.spongepowered.api.entity.living.player.Player;
+import org.spongepowered.api.world.World;
+
 import java.io.*;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -7,8 +10,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.bukkit.entity.Player;
-import org.bukkit.World;
 
 // image output stuff, for debugging method at bottom of this file
 import java.awt.*;
@@ -18,7 +19,7 @@ import javax.imageio.*;
 
 // by the way, this region file handler was created based on the divulged region file format: http://mojang.com/2011/02/16/minecraft-save-file-format-in-beta-1-3/
 
-public class WorldFileData
+/*public class WorldFileData
 {
 	private transient World world;
 	private transient File regionFolder = null;
@@ -31,7 +32,7 @@ public class WorldFileData
 	{
 		WorldFileData newData = new WorldFileData(world, notifyPlayer);
 
-		newData.regionFolder = new File(newData.world.getWorldFolder(), "region");
+		newData.regionFolder = new File(newData.world.getProperties().getWorldFolder(), "region");
 		if (!newData.regionFolder.exists() || !newData.regionFolder.isDirectory())
 		{
 			// check for region folder inside a DIM* folder (DIM-1 for nether, DIM1 for end, DIMwhatever for custom world types)
@@ -287,4 +288,4 @@ public class WorldFileData
 			Config.log("[SEVERE]" + ex.getLocalizedMessage());
 		}
 	}
-}
+}*/

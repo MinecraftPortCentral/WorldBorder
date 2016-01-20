@@ -125,12 +125,12 @@ public class CmdFill extends WBCmd
 			else
 				ticks = 20 / fillFrequency;
 
-/*	*/		Config.log("world: " + fillWorld + "  padding: " + fillPadding + "  repeats: " + repeats + "  ticks: " + ticks);			
+/*	*/		Config.log("world: " + fillWorld + "  padding: " + fillPadding + "  repeats: " + repeats + "  ticks: " + ticks);
 			Config.fillTask = new WorldFillTask(Bukkit.getServer(), player, fillWorld, fillPadding, repeats, ticks, fillForceLoad);
 			if (Config.fillTask.valid())
 			{
 				int task = Bukkit.getServer().getScheduler().scheduleSyncRepeatingTask(WorldBorder.plugin, Config.fillTask, ticks, ticks);
-				Config.fillTask.setTaskID(task);
+				Config.fillTask.setTask(task);
 				sender.sendMessage("WorldBorder map generation task for world \"" + fillWorld + "\" started.");
 			}
 			else
@@ -152,7 +152,7 @@ public class CmdFill extends WBCmd
 			sender.sendMessage(C_DESC + "You can cancel at any time with " + cmd + "cancel" + C_DESC + ", or pause/unpause with " + cmd + "pause" + C_DESC + ".");
 		}
 	}
-	
+
 
 	/* with "view-distance=10" in server.properties on a fast VM test server and "Render Distance: Far" in client,
 	 * hitting border during testing was loading 11+ chunks beyond the border in a couple of directions (10 chunks in

@@ -14,23 +14,28 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.ChatColor;
-import org.bukkit.Effect;
-import org.bukkit.entity.Player;
-import org.bukkit.Location;
-import org.bukkit.World;
-
+import com.google.common.reflect.TypeToken;
+import ninja.leaping.configurate.ConfigurationNode;
+import ninja.leaping.configurate.objectmapping.ObjectMappingException;
+import org.spongepowered.api.Sponge;
+import org.spongepowered.api.effect.particle.ParticleEffect;
+import org.spongepowered.api.effect.particle.ParticleTypes;
+import org.spongepowered.api.effect.sound.SoundTypes;
+import org.spongepowered.api.entity.Transform;
+import org.spongepowered.api.entity.living.player.Player;
+import org.spongepowered.api.scheduler.Task;
+import org.spongepowered.api.text.Text;
+import org.spongepowered.api.text.serializer.TextSerializers;
+import org.spongepowered.api.world.World;
 
 public class Config
 {
 	// private stuff used within this class
 	private static WorldBorder plugin;
-	private static FileConfiguration cfg = null;
+	private static ConfigurationNode cfg = null;
 	private static Logger wbLog = null;
 	public static volatile DecimalFormat coord = new DecimalFormat("0.0");
-	private static int borderTask = -1;
+	private static Task borderTask = null;
 	public static volatile WorldFillTask fillTask = null;
 	public static volatile WorldTrimTask trimTask = null;
 	private static Runtime rt = Runtime.getRuntime();
@@ -39,9 +44,9 @@ public class Config
 	private static boolean shapeRound = true;
 	private static Map<String, BorderData> borders = Collections.synchronizedMap(new LinkedHashMap<String, BorderData>());
 	private static Set<UUID> bypassPlayers = Collections.synchronizedSet(new LinkedHashSet<UUID>());
-	private static String message;		// raw message without color code formatting
-	private static String messageFmt;	// message with color code formatting ("&" changed to funky sort-of-double-dollar-sign for legitimate color/formatting codes)
-	private static String messageClean;	// message cleaned of formatting codes
+	private static Text message;		// raw message without color code formatting
+	private static Text messageFmt;	// message with color code formatting ("&" changed to funky sort-of-double-dollar-sign for legitimate color/formatting codes)
+	private static Text messageClean;	// message cleaned of formatting codes
 	private static boolean DEBUG = false;
 	private static double knockBack = 3.0;
 	private static int timerTicks = 4;
@@ -182,20 +187,20 @@ public class Config
 
 	public static void updateMessage(String msg)
 	{
-		message = msg;
-		messageFmt = replaceAmpColors(msg);
-		messageClean = stripAmpColors(msg);
+		message = Text.of(msg);
+		messageFmt = TextSerializers.FORMATTING_CODE.deserialize(msg);
+		messageClean = Text.of(TextSerializers.FORMATTING_CODE.stripCodes(msg));
 	}
 
-	public static String Message()
+	public static Text Message()
 	{
 		return messageFmt;
 	}
-	public static String MessageRaw()
+	public static Text MessageRaw()
 	{
 		return message;
 	}
-	public static String MessageClean()
+	public static Text MessageClean()
 	{
 		return messageClean;
 	}
@@ -248,20 +253,21 @@ public class Config
 		return whooshEffect;
 	}
 
-	public static void showWhooshEffect(Location loc)
+	public static void showWhooshEffect(Transform<World> loc)
 	{
 		if (!whooshEffect())
 			return;
 
-		World world = loc.getWorld();
-		world.playEffect(loc, Effect.ENDER_SIGNAL, 0);
-		world.playEffect(loc, Effect.ENDER_SIGNAL, 0);
-		world.playEffect(loc, Effect.SMOKE, 4);
-		world.playEffect(loc, Effect.SMOKE, 4);
-		world.playEffect(loc, Effect.SMOKE, 4);
-		world.playEffect(loc, Effect.GHAST_SHOOT, 0);
+		World world = loc.getExtent();
+		// TODO: Expose ENDER_SIGNAL (effect 2003) in SpongeAPI
+		//world.spawnParticles(loc, ParticleEffect.builder().type(ParticleTypes.).build(), 0);
+		//world.playEffect(loc, Effect.ENDER_SIGNAL, 0);
+		world.spawnParticles(ParticleEffect.builder().type(ParticleTypes.SMOKE_NORMAL).build(), loc.getPosition(), 4);
+		world.spawnParticles(ParticleEffect.builder().type(ParticleTypes.SMOKE_NORMAL).build(), loc.getPosition(), 4);
+		world.spawnParticles(ParticleEffect.builder().type(ParticleTypes.SMOKE_NORMAL).build(), loc.getPosition(), 4);
+		world.playSound(SoundTypes.GHAST_CHARGE, loc.getPosition(), 0);
 	}
-	
+
 	public static void setPreventBlockPlace(boolean enable)
 	{
 		if (preventBlockPlace != enable)
@@ -271,7 +277,7 @@ public class Config
 		log("prevent block place " + (enable ? "enabled" : "disabled") + ".");
 		save(true);
 	}
-	
+
 	public static void setPreventMobSpawn(boolean enable)
 	{
 		if (preventMobSpawn != enable)
@@ -447,17 +453,17 @@ public class Config
 
 	public static boolean isBorderTimerRunning()
 	{
-		if (borderTask == -1) return false;
-		return (plugin.getServer().getScheduler().isQueued(borderTask) || plugin.getServer().getScheduler().isCurrentlyRunning(borderTask));
+		if (borderTask == null) return false;
+		return Sponge.getScheduler().getTaskById(borderTask.getUniqueId()).isPresent();
 	}
 
 	public static void StartBorderTimer()
 	{
 		StopBorderTimer();
 
-		borderTask = plugin.getServer().getScheduler().scheduleSyncRepeatingTask(plugin, new BorderCheckTask(), timerTicks, timerTicks);
+		borderTask = Sponge.getScheduler().createTaskBuilder().intervalTicks(timerTicks).delayTicks(timerTicks).execute(new BorderCheckTask()).submit(plugin);
 
-		if (borderTask == -1)
+		if (borderTask == null)
 			logWarn("Failed to start timed border-checking task! This will prevent the plugin from working. Try restarting Bukkit.");
 
 		logConfig("Border-checking timed task started.");
@@ -465,10 +471,9 @@ public class Config
 
 	public static void StopBorderTimer()
 	{
-		if (borderTask == -1) return;
+		if (borderTask == null) return;
 
-		plugin.getServer().getScheduler().cancelTask(borderTask);
-		borderTask = -1;
+		borderTask.cancel();
 		logConfig("Border-checking timed task stopped.");
 	}
 
@@ -489,12 +494,12 @@ public class Config
 
 	public static void RestoreFillTask(String world, int fillDistance, int chunksPerRun, int tickFrequency, int x, int z, int length, int total, boolean forceLoad)
 	{
-		fillTask = new WorldFillTask(plugin.getServer(), null, world, fillDistance, chunksPerRun, tickFrequency, forceLoad);
+		fillTask = new WorldFillTask(null, world, fillDistance, chunksPerRun, tickFrequency, forceLoad);
 		if (fillTask.valid())
 		{
 			fillTask.continueProgress(x, z, length, total);
-			int task = plugin.getServer().getScheduler().scheduleSyncRepeatingTask(plugin, fillTask, 20, tickFrequency);
-			fillTask.setTaskID(task);
+			Task task = Sponge.getScheduler().createTaskBuilder().intervalTicks(tickFrequency).delayTicks(20).execute(fillTask).submit(plugin);
+			fillTask.setTask(task);
 		}
 	}
 	// for backwards compatibility
@@ -535,20 +540,9 @@ public class Config
 			return true;
 
 		if (notify)
-			player.sendMessage("You do not have sufficient permissions.");
+			player.sendMessage(Text.of("You do not have sufficient permissions."));
 
 		return false;
-	}
-
-
-	public static String replaceAmpColors (String message)
-	{
-		return ChatColor.translateAlternateColorCodes('&', message);
-	}
-	// adapted from code posted by Sleaker
-	public static String stripAmpColors (String message)
-	{
-		return message.replaceAll("(?i)&([a-fk-or0-9])", "");
 	}
 
 
@@ -572,34 +566,34 @@ public class Config
 
 	private static final int currentCfgVersion = 11;
 
-	public static void load(WorldBorder master, boolean logIt)
-	{	// load config from file
+	@SuppressWarnings("unchecked")
+	public static void load(WorldBorder master, boolean logIt) throws ObjectMappingException {	// load config from file
 		plugin = master;
-		wbLog = plugin.getLogger();
+		wbLog = plugin.logger;
 
 		plugin.reloadConfig();
-		cfg = plugin.getConfig();
+		cfg = plugin.rootNode;
 
-		int cfgVersion = cfg.getInt("cfg-version", currentCfgVersion);
+		int cfgVersion = cfg.getNode("cfg-version").getInt(currentCfgVersion);
 
-		String msg = cfg.getString("message");
-		shapeRound = cfg.getBoolean("round-border", true);
-		DEBUG = cfg.getBoolean("debug-mode", false);
-		whooshEffect = cfg.getBoolean("whoosh-effect", true);
-		portalRedirection = cfg.getBoolean("portal-redirection", true);
-		knockBack = cfg.getDouble("knock-back-dist", 3.0);
-		timerTicks = cfg.getInt("timer-delay-ticks", 5);
-		remountDelayTicks = cfg.getInt("remount-delay-ticks", 0);
-		dynmapEnable = cfg.getBoolean("dynmap-border-enabled", true);
-		dynmapMessage = cfg.getString("dynmap-border-message", "The border of the world.");
+		String msg = cfg.getNode("message").getString();
+		shapeRound = cfg.getNode("round-border").getBoolean(true);
+		DEBUG = cfg.getNode("debug-mode").getBoolean(false);
+		whooshEffect = cfg.getNode("whoosh-effect").getBoolean(true);
+		portalRedirection = cfg.getNode("portal-redirection").getBoolean(true);
+		knockBack = cfg.getNode("knock-back-dist").getDouble(3.0);
+		timerTicks = cfg.getNode("timer-delay-ticks").getInt(5);
+		remountDelayTicks = cfg.getNode("remount-delay-ticks").getInt(0);
+		dynmapEnable = cfg.getNode("dynmap-border-enabled").getBoolean(true);
+		dynmapMessage = cfg.getNode("dynmap-border-message").getString("The border of the world.");
 		logConfig("Using " + (ShapeName()) + " border, knockback of " + knockBack + " blocks, and timer delay of " + timerTicks + ".");
-		killPlayer = cfg.getBoolean("player-killed-bad-spawn", false);
-		denyEnderpearl = cfg.getBoolean("deny-enderpearl", true);
-		fillAutosaveFrequency = cfg.getInt("fill-autosave-frequency", 30);
-		importBypassStringList(cfg.getStringList("bypass-list-uuids"));
-		fillMemoryTolerance = cfg.getInt("fill-memory-tolerance", 500);
-		preventBlockPlace = cfg.getBoolean("prevent-block-place");
-		preventMobSpawn = cfg.getBoolean("prevent-mob-spawn");
+		killPlayer = cfg.getNode("player-killed-bad-spawn").getBoolean(false);
+		denyEnderpearl = cfg.getNode("deny-enderpearl").getBoolean(true);
+		fillAutosaveFrequency = cfg.getNode("fill-autosave-frequency").getInt(30);
+		importBypassStringList(cfg.getNode("bypass-list-uuids").getList(TypeToken.of(String.class)));
+		fillMemoryTolerance = cfg.getNode("fill-memory-tolerance").getInt(500);
+		preventBlockPlace = cfg.getNode("prevent-block-place").getBoolean();
+		preventMobSpawn = cfg.getNode("prevent-mob-spawn").getBoolean();
 
 		StartBorderTimer();
 
@@ -627,50 +621,51 @@ public class Config
 
 		// the border bypass list used to be stored as list of names rather than UUIDs; wipe that old list so the data won't be automatically saved back to the config file again
 		if (cfgVersion < 11)
-			cfg.set("bypass-list", null);
+			cfg.getNode("bypass-list").setValue(null);
 
-		ConfigurationSection worlds = cfg.getConfigurationSection("worlds");
+		Map<Object, ? extends ConfigurationNode> worlds = cfg.getNode("worlds").getChildrenMap();
 		if (worlds != null)
 		{
-			Set<String> worldNames = worlds.getKeys(false);
+			Set<String> worldNames = (Set) worlds.keySet();
 
 			for(String worldName : worldNames)
 			{
-				ConfigurationSection bord = worlds.getConfigurationSection(worldName);
+				ConfigurationNode bord = worlds.get(worldName);
 
 				// we're swapping "<" to "." at load since periods denote configuration nodes without a working way to change that, so world names with periods wreak havoc and are thus modified for storage
 				if (cfgVersion > 3)
 					worldName = worldName.replace("<", ".");
 
 				// backwards compatibility for config from before elliptical/rectangular borders were supported
-				if (bord.isSet("radius") && !bord.isSet("radiusX"))
+				if (bord.getNode("radius").getValue() != null && bord.getNode("radiusX").getValue() == null)
 				{
-					int radius = bord.getInt("radius");
-					bord.set("radiusX", radius);
-					bord.set("radiusZ", radius);
+					int radius = bord.getNode("radius").getInt();
+					bord.getNode("radiusX").setValue(radius);
+					bord.getNode("radiusZ").setValue(radius);
 				}
 
-				Boolean overrideShape = (Boolean) bord.get("shape-round");
-				boolean wrap = (boolean) bord.getBoolean("wrapping", false);
-				BorderData border = new BorderData(bord.getDouble("x", 0), bord.getDouble("z", 0), bord.getInt("radiusX", 0), bord.getInt("radiusZ", 0), overrideShape, wrap);
+				Boolean overrideShape = bord.getNode("shape-round").getBoolean();
+				boolean wrap =  bord.getNode("wrapping").getBoolean(false);
+
+				BorderData border = new BorderData(bord.getNode("x").getDouble(), bord.getNode("z").getDouble(), bord.getNode("radiusX").getInt(), bord.getNode("radiusZ").getInt(), overrideShape, wrap);
 				borders.put(worldName, border);
 				logConfig(BorderDescription(worldName));
 			}
 		}
 
 		// if we have an unfinished fill task stored from a previous run, load it up
-		ConfigurationSection storedFillTask = cfg.getConfigurationSection("fillTask");
+		ConfigurationNode storedFillTask = cfg.getNode("fillTask");
 		if (storedFillTask != null)
 		{
-			String worldName = storedFillTask.getString("world");
-			int fillDistance = storedFillTask.getInt("fillDistance", 176);
-			int chunksPerRun = storedFillTask.getInt("chunksPerRun", 5);
-			int tickFrequency = storedFillTask.getInt("tickFrequency", 20);
-			int fillX = storedFillTask.getInt("x", 0);
-			int fillZ = storedFillTask.getInt("z", 0);
-			int fillLength = storedFillTask.getInt("length", 0);
-			int fillTotal = storedFillTask.getInt("total", 0);
-			boolean forceLoad = storedFillTask.getBoolean("forceLoad", false);
+			String worldName = storedFillTask.getNode("world").getString();
+			int fillDistance = storedFillTask.getNode("fillDistance").getInt(176);
+			int chunksPerRun = storedFillTask.getNode("chunksPerRun").getInt(5);
+			int tickFrequency = storedFillTask.getNode("tickFrequency").getInt(20);
+			int fillX = storedFillTask.getNode("x").getInt();
+			int fillZ = storedFillTask.getNode("z").getInt();
+			int fillLength = storedFillTask.getNode("length").getInt();
+			int fillTotal = storedFillTask.getNode("total").getInt();
+			boolean forceLoad = storedFillTask.getNode("forceLoad").getBoolean();
 			RestoreFillTask(worldName, fillDistance, chunksPerRun, tickFrequency, fillX, fillZ, fillLength, fillTotal, forceLoad);
 			save(false);
 		}
@@ -690,56 +685,56 @@ public class Config
 	{	// save config to file
 		if (cfg == null) return;
 
-		cfg.set("cfg-version", currentCfgVersion);
-		cfg.set("message", message);
-		cfg.set("round-border", shapeRound);
-		cfg.set("debug-mode", DEBUG);
-		cfg.set("whoosh-effect", whooshEffect);
-		cfg.set("portal-redirection", portalRedirection);
-		cfg.set("knock-back-dist", knockBack);
-		cfg.set("timer-delay-ticks", timerTicks);
-		cfg.set("remount-delay-ticks", remountDelayTicks);
-		cfg.set("dynmap-border-enabled", dynmapEnable);
-		cfg.set("dynmap-border-message", dynmapMessage);
-		cfg.set("player-killed-bad-spawn", killPlayer);
-		cfg.set("deny-enderpearl", denyEnderpearl);
-		cfg.set("fill-autosave-frequency", fillAutosaveFrequency);
-		cfg.set("bypass-list-uuids", exportBypassStringList());
-		cfg.set("fill-memory-tolerance", fillMemoryTolerance);
-		cfg.set("prevent-block-place", preventBlockPlace);
-		cfg.set("prevent-mob-spawn", preventMobSpawn);
+		cfg.getNode("cfg-version").setValue(currentCfgVersion);
+		cfg.getNode("message").setValue(message);
+		cfg.getNode("round-border").setValue(shapeRound);
+		cfg.getNode("debug-mode").setValue(DEBUG);
+		cfg.getNode("whoosh-effect").setValue(whooshEffect);
+		cfg.getNode("portal-redirection").setValue(portalRedirection);
+		cfg.getNode("knock-back-dist").setValue(knockBack);
+		cfg.getNode("timer-delay-ticks").setValue(timerTicks);
+		cfg.getNode("remount-delay-ticks").setValue(remountDelayTicks);
+		cfg.getNode("dynmap-border-enabled").setValue(dynmapEnable);
+		cfg.getNode("dynmap-border-message").setValue(dynmapMessage);
+		cfg.getNode("player-killed-bad-spawn").setValue(killPlayer);
+		cfg.getNode("deny-enderpearl").setValue(denyEnderpearl);
+		cfg.getNode("fill-autosave-frequency").setValue(fillAutosaveFrequency);
+		cfg.getNode("bypass-list-uuids").setValue(exportBypassStringList());
+		cfg.getNode("fill-memory-tolerance").setValue(fillMemoryTolerance);
+		cfg.getNode("prevent-block-place").setValue(preventBlockPlace);
+		cfg.getNode("prevent-mob-spawn").setValue(preventMobSpawn);
 
-		cfg.set("worlds", null);
+		cfg.getNode("worlds").setValue(null);
 		for(Entry<String, BorderData> stringBorderDataEntry : borders.entrySet())
 		{
 			Entry wdata = stringBorderDataEntry;
 			String name = ((String)wdata.getKey()).replace(".", "<");
 			BorderData bord = (BorderData)wdata.getValue();
 
-			cfg.set("worlds." + name + ".x", bord.getX());
-			cfg.set("worlds." + name + ".z", bord.getZ());
-			cfg.set("worlds." + name + ".radiusX", bord.getRadiusX());
-			cfg.set("worlds." + name + ".radiusZ", bord.getRadiusZ());
-			cfg.set("worlds." + name + ".wrapping", bord.getWrapping());
+			cfg.getNode("worlds." + name + ".x").setValue(bord.getX());
+			cfg.getNode("worlds." + name + ".z").setValue(bord.getZ());
+			cfg.getNode("worlds." + name + ".radiusX").setValue(bord.getRadiusX());
+			cfg.getNode("worlds." + name + ".radiusZ").setValue(bord.getRadiusZ());
+			cfg.getNode("worlds." + name + ".wrapping").setValue(bord.getWrapping());
 
 			if (bord.getShape() != null)
-				cfg.set("worlds." + name + ".shape-round", bord.getShape());
+				cfg.getNode("worlds." + name + ".shape-round", bord.getShape());
 		}
 
 		if (storeFillTask && fillTask != null && fillTask.valid())
 		{
-			cfg.set("fillTask.world", fillTask.refWorld());
-			cfg.set("fillTask.fillDistance", fillTask.refFillDistance());
-			cfg.set("fillTask.chunksPerRun", fillTask.refChunksPerRun());
-			cfg.set("fillTask.tickFrequency", fillTask.refTickFrequency());
-			cfg.set("fillTask.x", fillTask.refX());
-			cfg.set("fillTask.z", fillTask.refZ());
-			cfg.set("fillTask.length", fillTask.refLength());
-			cfg.set("fillTask.total", fillTask.refTotal());
-			cfg.set("fillTask.forceLoad", fillTask.refForceLoad());
+			cfg.getNode("fillTask.world").setValue(fillTask.refWorld());
+			cfg.getNode("fillTask.fillDistance").setValue(fillTask.refFillDistance());
+			cfg.getNode("fillTask.chunksPerRun").setValue(fillTask.refChunksPerRun());
+			cfg.getNode("fillTask.tickFrequency").setValue(fillTask.refTickFrequency());
+			cfg.getNode("fillTask.x").setValue(fillTask.refX());
+			cfg.getNode("fillTask.z").setValue(fillTask.refZ());
+			cfg.getNode("fillTask.length").setValue(fillTask.refLength());
+			cfg.getNode("fillTask.total").setValue(fillTask.refTotal());
+			cfg.getNode("fillTask.forceLoad").setValue(fillTask.refForceLoad());
 		}
 		else
-			cfg.set("fillTask", null);
+			cfg.getNode("fillTask", null);
 
 		plugin.saveConfig();
 

@@ -6,7 +6,9 @@ import java.util.List;
 import org.bukkit.ChatColor;
 import org.bukkit.command.*;
 import org.bukkit.entity.Player;
-
+import org.spongepowered.api.text.Text;
+import org.spongepowered.api.text.format.TextColors;
+import org.spongepowered.api.text.format.TextStyles;
 
 public abstract class WBCmd
 {
@@ -45,12 +47,12 @@ public abstract class WBCmd
 	 */
 
 	// color values for strings
-	public final static String C_CMD  = ChatColor.AQUA.toString();			// main commands
-	public final static String C_DESC = ChatColor.WHITE.toString();			// command descriptions
-	public final static String C_ERR  = ChatColor.RED.toString();			// errors / notices
-	public final static String C_HEAD = ChatColor.YELLOW.toString();		// command listing header
-	public final static String C_OPT  = ChatColor.DARK_GREEN.toString();	// optional values
-	public final static String C_REQ  = ChatColor.GREEN.toString();			// required values
+	public final static Text C_CMD  = Text.of(TextColors.AQUA);			// main commands
+	public final static Text C_DESC = Text.of(TextColors.WHITE);				// command descriptions
+	public final static Text C_ERR  = Text.of(TextColors.RED);				// errors / notices
+	public final static Text C_HEAD = Text.of(TextColors.YELLOW);			// command listing header
+	public final static Text C_OPT  = Text.of(TextColors.DARK_GREEN);	;	// optional values
+	public final static Text C_REQ  = Text.of(TextColors.GREEN);				// required values
 
 	// colorized root command, for console and for player
 	public final static String CMD_C = C_CMD + "wb ";
@@ -65,7 +67,7 @@ public abstract class WBCmd
 	public final static List<String> cmdExamplesConsole = new ArrayList<String>(48);  // 48 command capacity, 6 full pages
 	public final static List<String> cmdExamplesPlayer = new ArrayList<String>(48);   // still, could need to increase later
 
-	
+
 	// add command examples for use the default "/wb" command list and for internal usage reference, formatted and colorized
 	public void addCmdExample(String example)
 	{
@@ -92,21 +94,21 @@ public abstract class WBCmd
 	}
 
 	// return root command formatted for player or console, based on sender
-	public String cmd(CommandSender sender)
+	public static String cmd(CommandSender sender)
 	{
 		return (sender instanceof Player) ? CMD_P : CMD_C;
 	}
 
 	// formatted and colorized text, intended for marking command name
-	public String commandEmphasized(String text)
+	public static Text commandEmphasized(String text)
 	{
-		return C_CMD + ChatColor.UNDERLINE + text + ChatColor.RESET + " ";
+		return Text.builder().append(C_CMD).append(Text.of(TextStyles.UNDERLINE, text, " ")).build();
 	}
 
 	// returns green "enabled" or red "disabled" text
-	public String enabledColored(boolean enabled)
+	public static Text enabledColored(boolean enabled)
 	{
-		return enabled ? C_REQ+"enabled" : C_ERR+"disabled";
+		return enabled ? Text.builder().append(C_REQ).append(Text.of("enabled")).build() : Text.builder().append(C_ERR).append(Text.of("disabled")).build();
 	}
 
 	// formatted and colorized command name, optionally prefixed with "[world]" (for player) / "<world>" (for console)

@@ -1,42 +1,48 @@
 package com.wimbli.WorldBorder;
 
-import org.bukkit.Chunk;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerTeleportEvent;
-import org.bukkit.event.player.PlayerPortalEvent;
+
 import org.bukkit.event.world.ChunkLoadEvent;
-import org.bukkit.Location;
+import org.spongepowered.api.entity.Transform;
+import org.spongepowered.api.event.Listener;
+import org.spongepowered.api.event.Order;
+import org.spongepowered.api.event.cause.entity.teleport.TeleportCause;
+import org.spongepowered.api.event.cause.entity.teleport.TeleportTypes;
+import org.spongepowered.api.event.entity.DisplaceEntityEvent;
+import org.spongepowered.api.event.entity.SpawnEntityEvent;
+import org.spongepowered.api.event.filter.IsCancelled;
+import org.spongepowered.api.event.filter.cause.First;
+import org.spongepowered.api.event.world.chunk.LoadChunkEvent;
+import org.spongepowered.api.util.Tristate;
+import org.spongepowered.api.world.Location;
+import org.spongepowered.api.world.World;
 
-
-public class WBListener implements Listener
+public class WBListener
 {
-	@EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
-	public void onPlayerTeleport(PlayerTeleportEvent event)
-	{
+	@Listener(order = Order.PRE)
+	@IsCancelled(Tristate.UNDEFINED)
+	public void onPlayerTeleport(DisplaceEntityEvent.Teleport.TargetPlayer event, @First TeleportCause teleportCause) {
 		// if knockback is set to 0, simply return
 		if (Config.KnockBack() == 0.0)
 			return;
 
 		if (Config.Debug())
-			Config.log("Teleport cause: " + event.getCause().toString());
+			Config.log("Teleport cause: " + teleportCause.getTeleportType().toString());
 
-		Location newLoc = BorderCheckTask.checkPlayer(event.getPlayer(), event.getTo(), true, true);
-		if (newLoc != null)
+		Transform<World> newTransform = BorderCheckTask.checkPlayer(event.getTargetEntity(), event.getToTransform(), true, true);
+		if (newTransform != null)
 		{
-			if(event.getCause() == PlayerTeleportEvent.TeleportCause.ENDER_PEARL && Config.getDenyEnderpearl())
-			{
+			if(teleportCause.getTeleportType().equals(TeleportTypes.ENDER_PEARL) && Config.getDenyEnderpearl()) {
 				event.setCancelled(true);
 				return;
 			}
 
-			event.setTo(newLoc);
+			event.setToTransform(newTransform);
 		}
 	}
 
-	@EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
-	public void onPlayerPortal(PlayerPortalEvent event)
+	/*@Listener(order = Order.PRE)
+	@IsCancelled(Tristate.UNDEFINED)
+	public void onPlayerPortal(Porta event)
 	{
 		// if knockback is set to 0, or portal redirection is disabled, simply return
 		if (Config.KnockBack() == 0.0 || !Config.portalRedirection())
@@ -45,10 +51,10 @@ public class WBListener implements Listener
 		Location newLoc = BorderCheckTask.checkPlayer(event.getPlayer(), event.getTo(), true, false);
 		if (newLoc != null)
 			event.setTo(newLoc);
-	}
+	}*/
 
-	@EventHandler(priority = EventPriority.MONITOR)
-	public void onChunkLoad(ChunkLoadEvent event)
+	@Listener(order = Order.POST)
+	public void onChunkLoad(LoadChunkEvent event)
 	{
 /*		// tested, found to spam pretty rapidly as client repeatedly requests the same chunks since they're not being sent
 		// definitely too spammy at only 16 blocks outside border

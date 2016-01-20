@@ -1,12 +1,15 @@
 package com.wimbli.WorldBorder;
 
+import com.flowpowered.math.vector.Vector3d;
+import com.google.common.collect.Sets;
+import org.spongepowered.api.block.BlockType;
+import org.spongepowered.api.block.BlockTypes;
+import org.spongepowered.api.entity.Transform;
+import org.spongepowered.api.world.Location;
+import org.spongepowered.api.world.World;
+
 import java.util.Arrays;
 import java.util.LinkedHashSet;
-
-import org.bukkit.Chunk;
-import org.bukkit.Location;
-import org.bukkit.World;
-
 
 public class BorderData
 {
@@ -195,7 +198,7 @@ public class BorderData
 	{
 		return insideBorder(xLoc, zLoc, Config.ShapeRound());
 	}
-	public boolean insideBorder(Location loc)
+	public boolean insideBorder(Location<World> loc)
 	{
 		return insideBorder(loc.getX(), loc.getZ(), Config.ShapeRound());
 	}
@@ -208,15 +211,15 @@ public class BorderData
 		return insideBorder(coord.x, coord.z, Config.ShapeRound());
 	}
 
-	public Location correctedPosition(Location loc, boolean round, boolean flying)
+	public Transform<World> correctedPosition(Transform<World> transform, boolean round, boolean flying)
 	{
 		// if this border has a shape override set, use it
 		if (shapeRound != null)
 			round = shapeRound.booleanValue();
 
-		double xLoc = loc.getX();
-		double zLoc = loc.getZ();
-		double yLoc = loc.getY();
+		double xLoc = transform.getPosition().getX();
+		double zLoc = transform.getPosition().getZ();
+		double yLoc = transform.getPosition().getY();
 
 		// square border
 		if (!round)
@@ -267,50 +270,59 @@ public class BorderData
 			}
 		}
 
-		int ixLoc = Location.locToBlock(xLoc);
-		int izLoc = Location.locToBlock(zLoc);
+		int ixLoc = (int) Math.floor(xLoc);
+		int izLoc = (int) Math.floor(zLoc);
 
 		// Make sure the chunk we're checking in is actually loaded
-		Chunk tChunk = loc.getWorld().getChunkAt(CoordXZ.blockToChunk(ixLoc), CoordXZ.blockToChunk(izLoc));
-		if (!tChunk.isLoaded())
-			tChunk.load();
 
-		yLoc = getSafeY(loc.getWorld(), ixLoc, Location.locToBlock(yLoc), izLoc, flying);
-		if (yLoc == -1)
+		transform.getExtent().loadChunk(CoordXZ.blockToChunk(ixLoc), 0, CoordXZ.blockToChunk(izLoc), true).get();
+
+		yLoc = getSafeY(transform.getExtent(), ixLoc, (int) Math.floor(yLoc), izLoc, flying);
+		if (yLoc == -1) {
 			return null;
+		}
 
-		return new Location(loc.getWorld(), Math.floor(xLoc) + 0.5, yLoc, Math.floor(zLoc) + 0.5, loc.getYaw(), loc.getPitch());
+		return new Transform<>(transform.getExtent(),
+                new Vector3d(transform.getLocation().getBlockX() + 0.5, yLoc, transform.getLocation().getBlockZ() + 0.5)).setRotation(new Vector3d(transform.getYaw(), transform.getPitch(), 0));
 	}
-	public Location correctedPosition(Location loc, boolean round)
+	public Transform<World> correctedPosition(Transform<World> transform, boolean round)
 	{
-		return correctedPosition(loc, round, false);
+		return correctedPosition(transform, round, false);
 	}
-	public Location correctedPosition(Location loc)
+	public Transform<World> correctedPosition(Transform<World> transform)
 	{
-		return correctedPosition(loc, Config.ShapeRound(), false);
+		return correctedPosition(transform, Config.ShapeRound(), false);
 	}
 
 	//these material IDs are acceptable for places to teleport player; breathable blocks and water
-	public static final LinkedHashSet<Integer> safeOpenBlocks = new LinkedHashSet<Integer>(Arrays.asList(
-		 new Integer[] {0, 6, 8, 9, 27, 28, 30, 31, 32, 37, 38, 39, 40, 50, 55, 59, 63, 64, 65, 66, 68, 69, 70, 71, 72, 75, 76, 77, 78, 83, 90, 93, 94, 96, 104, 105, 106, 115, 131, 132, 141, 142, 149, 150, 157, 171}
+	public static final LinkedHashSet<BlockType> safeOpenBlocks = Sets.newLinkedHashSet(Arrays.asList(
+			BlockTypes.AIR, BlockTypes.SAPLING, BlockTypes.FLOWING_WATER, BlockTypes.WATER, BlockTypes.GOLDEN_RAIL,
+			BlockTypes.DETECTOR_RAIL, BlockTypes.WEB, BlockTypes.TALLGRASS, BlockTypes.DEADBUSH, BlockTypes.YELLOW_FLOWER,
+			BlockTypes.RED_FLOWER, BlockTypes.BROWN_MUSHROOM, BlockTypes.RED_MUSHROOM, BlockTypes.TORCH, BlockTypes.REDSTONE_WIRE,
+			BlockTypes.WHEAT, BlockTypes.STANDING_SIGN, BlockTypes.WOODEN_DOOR, BlockTypes.LADDER, BlockTypes.RAIL, BlockTypes.WALL_SIGN,
+			BlockTypes.LEVER, BlockTypes.STONE_PRESSURE_PLATE, BlockTypes.IRON_DOOR, BlockTypes.WOODEN_PRESSURE_PLATE, BlockTypes.UNLIT_REDSTONE_TORCH,
+			BlockTypes.REDSTONE_TORCH, BlockTypes.STONE_BUTTON, BlockTypes.SNOW, BlockTypes.REEDS, BlockTypes.PORTAL, BlockTypes.UNPOWERED_REPEATER,
+			BlockTypes.POWERED_REPEATER, BlockTypes.TRAPDOOR, BlockTypes.PUMPKIN_STEM, BlockTypes.MELON_STEM, BlockTypes.VINE, BlockTypes.NETHER_WART,
+			BlockTypes.TRIPWIRE_HOOK, BlockTypes.TRIPWIRE, BlockTypes.CARROTS, BlockTypes.POTATOES, BlockTypes.UNPOWERED_COMPARATOR, BlockTypes.POWERED_COMPARATOR,
+			BlockTypes.ACTIVATOR_RAIL, BlockTypes.CARPET
 	));
 
 	//these material IDs are ones we don't want to drop the player onto, like cactus or lava or fire or activated Ender portal
-	public static final LinkedHashSet<Integer> painfulBlocks = new LinkedHashSet<Integer>(Arrays.asList(
-		 new Integer[] {10, 11, 51, 81, 119}
+	public static final LinkedHashSet<BlockType> painfulBlocks = new LinkedHashSet<>(Arrays.asList(
+		 BlockTypes.FLOWING_LAVA, BlockTypes.LAVA, BlockTypes.FIRE, BlockTypes.CACTUS, BlockTypes.END_PORTAL
 	));
 
 	// check if a particular spot consists of 2 breathable blocks over something relatively solid
 	private boolean isSafeSpot(World world, int X, int Y, int Z, boolean flying)
 	{
-		boolean safe = safeOpenBlocks.contains((Integer)world.getBlockTypeIdAt(X, Y, Z))		// target block open and safe
-					&& safeOpenBlocks.contains((Integer)world.getBlockTypeIdAt(X, Y + 1, Z));	// above target block open and safe
+		boolean safe = safeOpenBlocks.contains(world.getBlockType(X, Y, Z))		// target block open and safe
+					&& safeOpenBlocks.contains(world.getBlockType(X, Y + 1, Z));	// above target block open and safe
 		if (!safe || flying)
 			return safe;
 
-		Integer below = (Integer)world.getBlockTypeIdAt(X, Y - 1, Z);
+		BlockType below = world.getBlockType(X, Y - 1, Z);
 		return (safe
-			 && (!safeOpenBlocks.contains(below) || below == 8 || below == 9)	// below target block not open/breathable (so presumably solid), or is water
+			 && (!safeOpenBlocks.contains(below) || below.equals(BlockTypes.FLOWING_WATER) || below.equals(BlockTypes.WATER))	// below target block not open/breathable (so presumably solid), or is water
 			 && !painfulBlocks.contains(below)									// below target block not painful
 			);
 	}
@@ -321,7 +333,7 @@ public class BorderData
 	private double getSafeY(World world, int X, int Y, int Z, boolean flying)
 	{
 		// artificial height limit of 127 added for Nether worlds since CraftBukkit still incorrectly returns 255 for their max height, leading to players sent to the "roof" of the Nether
-		final int limTop = (world.getEnvironment() == World.Environment.NETHER) ? 125 : world.getMaxHeight() - 2;
+		final int limTop = world.getDimension().getBuildHeight();
 		// Expanding Y search method adapted from Acru's code in the Nether plugin
 
 		for(int y1 = Y, y2 = Y; (y1 > limBot) || (y2 < limTop); y1--, y2++){

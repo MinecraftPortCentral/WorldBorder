@@ -1,32 +1,31 @@
 package com.wimbli.WorldBorder.cmd;
 
-import java.util.List;
-import java.util.UUID;
+import static com.wimbli.WorldBorder.cmd.WBCmd.C_DESC;
+import static com.wimbli.WorldBorder.cmd.WBCmd.commandEmphasized;
 
-import org.bukkit.Bukkit;
-import org.bukkit.command.*;
-import org.bukkit.entity.Player;
+import com.wimbli.WorldBorder.Config;
+import org.spongepowered.api.command.CommandException;
+import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandSource;
+import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.spec.CommandExecutor;
+import org.spongepowered.api.entity.living.player.Player;
+import org.spongepowered.api.text.Text;
 
-import com.wimbli.WorldBorder.*;
-import com.wimbli.WorldBorder.UUID.UUIDFetcher;
+public class CmdBypass implements CommandExecutor {
 
+    public static Text helpText =
+            Text.builder().append(Text.of("If [player] isn't specified, command sender is used. If [on|off] isn't specified, the value will " +
+                    "be toggled. Once bypass is enabled, the player will not be stopped by any borders until bypass is " +
+                    "disabled for them again. Use the ")).append(commandEmphasized("bypasslist")).append(C_DESC)
+                    .append(Text.of("command to list all " +
+                            "players with bypass enabled.")).build();
 
-public class CmdBypass extends WBCmd
-{
-	public CmdBypass()
-	{
-		name = permission = "bypass";
-		minParams = 0;
-		maxParams = 2;
+    public CmdBypass() {
+        //addCmdExample(nameEmphasized() + "{player} [on|off] - let player go beyond border.");
+    }
 
-		addCmdExample(nameEmphasized() + "{player} [on|off] - let player go beyond border.");
-		helpText = "If [player] isn't specified, command sender is used. If [on|off] isn't specified, the value will " +
-			"be toggled. Once bypass is enabled, the player will not be stopped by any borders until bypass is " +
-			"disabled for them again. Use the " + commandEmphasized("bypasslist") + C_DESC + "command to list all " +
-			"players with bypass enabled.";
-	}
-
-	@Override
+	/*@Override
 	public void cmdStatus(CommandSender sender)
 	{
 		if (!(sender instanceof Player))
@@ -34,67 +33,24 @@ public class CmdBypass extends WBCmd
 
 		boolean bypass = Config.isPlayerBypassing(((Player)sender).getUniqueId());
 		sender.sendMessage(C_HEAD + "Border bypass is currently " + enabledColored(bypass) + C_HEAD + " for you.");
-	}
+	}*/
 
-	@Override
-	public void execute(final CommandSender sender, final Player player, final List<String> params, String worldName)
-	{
-		if (player == null && params.isEmpty())
-		{
-			sendErrorAndHelp(sender, "When running this command from console, you must specify a player.");
-			return;
-		}
+    public CommandResult execute(CommandSource commandSource, CommandContext commandContext) throws CommandException {
+        Player player = commandContext.<Player>getOne("player").get();
 
-		Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(WorldBorder.plugin, new Runnable()
-		{
-			@Override
-			public void run()
-			{
-				final String sPlayer = (params.isEmpty()) ? player.getName() : params.get(0);
-				UUID uPlayer = (params.isEmpty()) ? player.getUniqueId() : null;
+        boolean bypassing = !Config.isPlayerBypassing(player.getUniqueId());
+        if (commandContext.<Boolean>getOne("bypass").isPresent()) {
+            bypassing = commandContext.<Boolean>getOne("bypass").get();
+        }
 
-				if (uPlayer == null)
-				{
-					Player p = Bukkit.getPlayer(sPlayer);
-					if (p != null)
-					{
-						uPlayer = p.getUniqueId();
-					}
-					else
-					{
-						// only do UUID lookup using Mojang server if specified player isn't online
-						try
-						{
-							uPlayer = UUIDFetcher.getUUIDOf(sPlayer);
-						}
-						catch(Exception ex)
-						{
-							sendErrorAndHelp(sender, "Failed to look up UUID for the player name you specified. " + ex.getLocalizedMessage());
-							return;
-						}
-					}
-				}
-				if (uPlayer == null)
-				{
-					sendErrorAndHelp(sender, "Failed to look up UUID for the player name you specified; null value returned.");
-					return;
-				}
+        Config.setPlayerBypass(player.getUniqueId(), bypassing);
 
-				boolean bypassing = !Config.isPlayerBypassing(uPlayer);
-				if (params.size() > 1)
-					bypassing = strAsBool(params.get(1));
+        player.sendMessage(
+                Text.builder().append(Text.of("Border bypass is now ")).append(WBCmd.enabledColored(bypassing)).append(Text.of(".")).build());
 
-				Config.setPlayerBypass(uPlayer, bypassing);
+        Config.log("Border bypass for player \"" + player.getName() + "\" is " + (bypassing ? "enabled" : "disabled") +
+                (player != null ? " at the command of player \"" + player.getName() + "\"" : "") + ".");
 
-				Player target = Bukkit.getPlayer(sPlayer);
-				if (target != null && target.isOnline())
-					target.sendMessage("Border bypass is now " + enabledColored(bypassing) + ".");
-
-				Config.log("Border bypass for player \"" + sPlayer + "\" is " + (bypassing ? "enabled" : "disabled") +
-						   (player != null ? " at the command of player \"" + player.getName() + "\"" : "") + ".");
-				if (player != null && player != target)
-					sender.sendMessage("Border bypass for player \"" + sPlayer + "\" is " + enabledColored(bypassing) + ".");
-			}
-		});
-	}
+        return CommandResult.success();
+    }
 }

@@ -1,18 +1,26 @@
 package com.wimbli.WorldBorder.cmd;
 
+import com.wimbli.WorldBorder.WorldBorder;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+import org.spongepowered.api.command.CommandException;
+import org.spongepowered.api.command.CommandResult;
+import org.spongepowered.api.command.CommandSource;
+import org.spongepowered.api.command.args.CommandContext;
+import org.spongepowered.api.command.spec.CommandExecutor;
+import org.spongepowered.api.command.spec.CommandSpec;
+
 import java.util.List;
 import java.util.Set;
 
-import org.bukkit.command.*;
-import org.bukkit.entity.Player;
-
-import com.wimbli.WorldBorder.*;
-
-
-public class CmdHelp extends WBCmd
+public class CmdHelp implements CommandExecutor
 {
 	public CmdHelp()
 	{
+
+		CommandSpec.builder()
+				.permission("worldborder.help");
+
 		name = permission = "help";
 		minParams = 0;
 		maxParams = 10;
@@ -49,5 +57,10 @@ public class CmdHelp extends WBCmd
 			}
 		}
 		sendErrorAndHelp(sender, "No command recognized.");
+	}
+
+	@Override
+	public CommandResult execute(CommandSource commandSource, CommandContext commandContext) throws CommandException {
+		return null;
 	}
 }

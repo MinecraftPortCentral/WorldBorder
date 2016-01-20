@@ -3,33 +3,34 @@ package com.wimbli.WorldBorder;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
-import org.bukkit.Bukkit;
-import org.bukkit.Chunk;
-import org.bukkit.entity.Player;
-import org.bukkit.Server;
-import org.bukkit.World;
-
+import com.flowpowered.math.vector.Vector3i;
 import com.wimbli.WorldBorder.Events.WorldBorderFillFinishedEvent;
-
+import org.spongepowered.api.Server;
+import org.spongepowered.api.Sponge;
+import org.spongepowered.api.entity.living.player.Player;
+import org.spongepowered.api.scheduler.Task;
+import org.spongepowered.api.text.Text;
+import org.spongepowered.api.world.Chunk;
+import org.spongepowered.api.world.World;
 
 public class WorldFillTask implements Runnable
 {
 	// general task-related reference data
-	private transient Server server = null;
 	private transient World world = null;
 	private transient BorderData border = null;
-	private transient WorldFileData worldData = null;
+	//private transient WorldFileData worldData = null;
 	private transient boolean readyToGo = false;
 	private transient boolean paused = false;
 	private transient boolean pausedForMemory = false;
-	private transient int taskID = -1;
+	private transient Task task = null;
 	private transient Player notifyPlayer = null;
 	private transient int chunksPerRun = 1;
 	private transient boolean continueNotice = false;
 	private transient boolean forceLoad = false;
-	
+
 	// these are only stored for saving task to config
 	private transient int fillDistance = 208;
 	private transient int tickFrequency = 1;
@@ -57,25 +58,28 @@ public class WorldFillTask implements Runnable
 	private transient int reportTotal = 0;
 	private transient int reportNum = 0;
 
+    private transient boolean valid;
 
-	public WorldFillTask(Server theServer, Player player, String worldName, int fillDistance, int chunksPerRun, int tickFrequency, boolean forceLoad)
+
+	public WorldFillTask(Player player, String worldName, int fillDistance, int chunksPerRun, int tickFrequency, boolean forceLoad)
 	{
-		this.server = theServer;
+		this.valid = true;
 		this.notifyPlayer = player;
 		this.fillDistance = fillDistance;
 		this.tickFrequency = tickFrequency;
 		this.chunksPerRun = chunksPerRun;
 		this.forceLoad = forceLoad;
 
-		this.world = server.getWorld(worldName);
-		if (this.world == null)
-		{
+		Optional<World> world = Sponge.getServer().getWorld(worldName);
+		if (!world.isPresent()) {
 			if (worldName.isEmpty())
 				sendMessage("You must specify a world!");
 			else
 				sendMessage("World \"" + worldName + "\" not found!");
 			this.stop();
 			return;
+		} else {
+			this.world = world.get();
 		}
 
 		this.border = (Config.Border(worldName) == null) ? null : Config.Border(worldName).copy();
@@ -87,12 +91,12 @@ public class WorldFillTask implements Runnable
 		}
 
 		// load up a new WorldFileData for the world in question, used to scan region files for which chunks are already fully generated and such
-		worldData = WorldFileData.create(world, notifyPlayer);
-		if (worldData == null)
+		//worldData = WorldFileData.create(world, notifyPlayer);
+		/*if (worldData == null)
 		{
 			this.stop();
 			return;
-		}
+		}*/
 
 		this.border.setRadiusX(border.getRadiusX() + fillDistance);
 		this.border.setRadiusZ(border.getRadiusZ() + fillDistance);
@@ -107,13 +111,12 @@ public class WorldFillTask implements Runnable
 		//This would be another way to calculate reportTarget, it assumes that we don't need time to check if the chunk is outside and then skip it (it calculates the area of the rectangle/ellipse)
 		//this.reportTarget = (this.border.getShape()) ? ((int) Math.ceil(chunkWidthX * chunkWidthZ / 4 * Math.PI + 2 * chunkWidthX)) : (chunkWidthX * chunkWidthZ);
 		//                                                                       Area of the ellipse                 just to be safe      area of the rectangle
-		
-		
+
+
 		// keep track of the chunks which are already loaded when the task starts, to not unload them
-		Chunk[] originals = world.getLoadedChunks();
-		for (Chunk original : originals)
+		for (Chunk original : this.world.getLoadedChunks())
 		{
-			originalChunks.add(new CoordXZ(original.getX(), original.getZ()));
+			originalChunks.add(new CoordXZ(original.getPosition().getX(), original.getPosition().getZ()));
 		}
 
 		this.readyToGo = true;
@@ -121,13 +124,13 @@ public class WorldFillTask implements Runnable
 	// for backwards compatibility
 	public WorldFillTask(Server theServer, Player player, String worldName, int fillDistance, int chunksPerRun, int tickFrequency)
 	{
-		this(theServer, player, worldName, fillDistance, chunksPerRun, tickFrequency, false);
+		this(player, worldName, fillDistance, chunksPerRun, tickFrequency, false);
 	}
 
-	public void setTaskID(int ID)
-	{	
-		if (ID == -1) this.stop();
-		this.taskID = ID;
+	public void setTask(Task task)
+	{
+		if (task == null) this.stop();
+		this.task = task;
 	}
 
 
@@ -151,7 +154,7 @@ public class WorldFillTask implements Runnable
 			sendMessage("Available memory is sufficient, automatically continuing.");
 		}
 
-		if (server == null || !readyToGo || paused)
+		if (!this.valid || !readyToGo || paused)
 			return;
 
 		// this is set so it only does one iteration at a time, no matter how frequently the timer fires
@@ -189,28 +192,28 @@ public class WorldFillTask implements Runnable
 			if (!forceLoad)
 			{
 				// skip past any chunks which are confirmed as fully generated using our super-special isChunkFullyGenerated routine
-				while (worldData.isChunkFullyGenerated(x, z))
+				/*while (worldData.isChunkFullyGenerated(x, z))
 				{
 					insideBorder = true;
 					if (!moveToNext())
 						return;
-				}
+				}*/
 			}
 
 			// load the target chunk and generate it if necessary
-			world.loadChunk(x, z, true);
-			worldData.chunkExistsNow(x, z);
+			world.loadChunk(new Vector3i(x, 0, z), true);
+			//worldData.chunkExistsNow(x, z);
 
 			// There need to be enough nearby chunks loaded to make the server populate a chunk with trees, snow, etc.
 			// So, we keep the last few chunks loaded, and need to also temporarily load an extra inside chunk (neighbor closest to center of map)
 			int popX = !isZLeg ? x : (x + (isNeg ? -1 : 1));
 			int popZ = isZLeg ? z : (z + (!isNeg ? -1 : 1));
-			world.loadChunk(popX, popZ, false);
+			world.loadChunk(new Vector3i(popX, 0, popZ), false);
 
 			// make sure the previous chunk in our spiral is loaded as well (might have already existed and been skipped over)
 			if (!storedChunks.contains(lastChunk) && !originalChunks.contains(lastChunk))
 			{
-				world.loadChunk(lastChunk.x, lastChunk.z, false);
+				world.loadChunk(new Vector3i(lastChunk.x, 0, lastChunk.z), false);
 				storedChunks.add(new CoordXZ(lastChunk.x, lastChunk.z));
 			}
 
@@ -223,7 +226,7 @@ public class WorldFillTask implements Runnable
 			{
 				CoordXZ coord = storedChunks.remove(0);
 				if (!originalChunks.contains(coord))
-					world.unloadChunkRequest(coord.x, coord.z);
+                    world.getChunk(coord.x, 0, coord.z).ifPresent(c -> world.unloadChunk(c));
 			}
 
 			// move on to next chunk
@@ -314,8 +317,8 @@ public class WorldFillTask implements Runnable
 	{
 		this.paused = true;
 		reportProgress();
-		world.save();
-		Bukkit.getServer().getPluginManager().callEvent(new WorldBorderFillFinishedEvent(world, reportTotal));
+		Sponge.getServer().saveWorldProperties(world.getProperties());
+		Sponge.getEventManager().post(new WorldBorderFillFinishedEvent(world, reportTotal));
 		sendMessage("task successfully completed for world \"" + refWorld() + "\"!");
 		this.stop();
 	}
@@ -329,27 +332,31 @@ public class WorldFillTask implements Runnable
 	// we're done, whether finished or cancelled
 	private void stop()
 	{
-		if (server == null)
-			return;
+
+        if (!this.valid) {
+            return;
+        }
 
 		readyToGo = false;
-		if (taskID != -1)
-			server.getScheduler().cancelTask(taskID);
-		server = null;
+		if (this.task != null) {
+            task.cancel();
+        }
+
+        this.valid = false;
 
 		// go ahead and unload any chunks we still have loaded
 		while(!storedChunks.isEmpty())
 		{
 			CoordXZ coord = storedChunks.remove(0);
 			if (!originalChunks.contains(coord))
-				world.unloadChunkRequest(coord.x, coord.z);
+				world.getChunk(coord.x, 0, coord.z).ifPresent(c -> world.unloadChunk(c));
 		}
 	}
 
 	// is this task still valid/workable?
 	public boolean valid()
 	{
-		return this.server != null;
+		return this.valid;
 	}
 
 	// handle pausing/unpausing the task
@@ -394,7 +401,7 @@ public class WorldFillTask implements Runnable
 		{
 			lastAutosave = lastReport;
 			sendMessage("Saving the world to disk, just to be on the safe side.");
-			world.save();
+			Sponge.getServer().saveWorldProperties(this.world.getProperties());
 		}
 	}
 
@@ -406,7 +413,7 @@ public class WorldFillTask implements Runnable
 
 		Config.log("[Fill] " + text + " (free mem: " + availMem + " MB)");
 		if (notifyPlayer != null)
-			notifyPlayer.sendMessage("[Fill] " + text);
+			notifyPlayer.sendMessage(Text.of("[Fill] " + text));
 
 		if (availMem < 200)
 		{	// running low on memory, auto-pause
@@ -415,7 +422,7 @@ public class WorldFillTask implements Runnable
 			text = "Available memory is very low, task is pausing. A cleanup will be attempted now, and the task will automatically continue if/when sufficient memory is freed up.\n Alternatively, if you restart the server, this task will automatically continue once the server is back up.";
 			Config.log("[Fill] " + text);
 			if (notifyPlayer != null)
-				notifyPlayer.sendMessage("[Fill] " + text);
+				notifyPlayer.sendMessage(Text.of("[Fill] " + text));
 			// prod Java with a request to go ahead and do GC to clean unloaded chunks from memory; this seems to work wonders almost immediately
 			// yes, explicit calls to System.gc() are normally bad, but in this case it otherwise can take a long long long time for Java to recover memory
 			System.gc();

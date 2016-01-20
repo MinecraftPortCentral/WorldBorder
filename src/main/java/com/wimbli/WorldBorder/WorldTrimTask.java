@@ -15,7 +15,7 @@ import org.bukkit.World;
 import com.wimbli.WorldBorder.Events.WorldBorderTrimFinishedEvent;
 
 
-public class WorldTrimTask implements Runnable
+/*public class WorldTrimTask implements Runnable
 {
 	// general task-related reference data
 	private transient Server server = null;
@@ -27,7 +27,7 @@ public class WorldTrimTask implements Runnable
 	private transient int taskID = -1;
 	private transient Player notifyPlayer = null;
 	private transient int chunksPerRun = 1;
-	
+
 	// values for what chunk in the current region we're at
 	private transient int currentRegion = -1;  // region(file) we're at in regionFiles
 	private transient int regionX = 0;  // X location value of the current region
@@ -214,7 +214,7 @@ public class WorldTrimTask implements Runnable
 		return true;
 	}
 
-	// add just the 4 corner chunks of the region; can determine if entire region is _inside_ the border 
+	// add just the 4 corner chunks of the region; can determine if entire region is _inside_ the border
 	private void addCornerChunks()
 	{
 		regionChunks.add(new CoordXZ(CoordXZ.regionToChunk(regionX), CoordXZ.regionToChunk(regionZ)));
@@ -223,7 +223,7 @@ public class WorldTrimTask implements Runnable
 		regionChunks.add(new CoordXZ(CoordXZ.regionToChunk(regionX) + 31, CoordXZ.regionToChunk(regionZ) + 31));
 	}
 
-	// add all chunks along the 4 edges of the region (minus the corners); can determine if entire region is _outside_ the border 
+	// add all chunks along the 4 edges of the region (minus the corners); can determine if entire region is _outside_ the border
 	private void addEdgeChunks()
 	{
 		int chunkX = 0, chunkZ;
@@ -400,4 +400,4 @@ public class WorldTrimTask implements Runnable
 		if (notifyPlayer != null)
 			notifyPlayer.sendMessage("[Trim] " + text);
 	}
-}
+}*/

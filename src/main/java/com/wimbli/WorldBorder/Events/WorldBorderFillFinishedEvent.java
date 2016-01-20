@@ -1,34 +1,26 @@
 package com.wimbli.WorldBorder.Events;
 
-import org.bukkit.event.Event;
-import org.bukkit.event.HandlerList;
-import org.bukkit.World;
+import com.wimbli.WorldBorder.WorldBorder;
+import org.spongepowered.api.event.Event;
+import org.spongepowered.api.event.cause.Cause;
+import org.spongepowered.api.event.impl.AbstractEvent;
+import org.spongepowered.api.world.World;
 
 /**
  * Created by timafh on 04.09.2015.
  */
-public class WorldBorderFillFinishedEvent extends Event
-{
-	private static final HandlerList handlers = new HandlerList();
+public class WorldBorderFillFinishedEvent extends AbstractEvent {
 	private World world;
 	private long totalChunks;
+	private Cause cause;
 
 	public WorldBorderFillFinishedEvent(World world, long totalChunks)
 	{
 		this.world = world;
 		this.totalChunks = totalChunks;
+		this.cause = Cause.of(WorldBorder.container);
 	}
 
-	@Override
-	public HandlerList getHandlers()
-	{
-		return handlers;
-	}
-
-	public static HandlerList getHandlerList()
-	{
-		return handlers;
-	}
 
 	public World getWorld()
 	{
@@ -38,5 +30,10 @@ public class WorldBorderFillFinishedEvent extends Event
 	public long getTotalChunks()
 	{
 		return totalChunks;
+	}
+
+	@Override
+	public Cause getCause() {
+		return this.cause;
 	}
 }

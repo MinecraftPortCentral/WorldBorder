@@ -1,35 +1,31 @@
 package com.wimbli.WorldBorder;
 
-import org.bukkit.Location;
-import org.bukkit.World;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.HandlerList;
-import org.bukkit.event.Listener;
-import org.bukkit.event.block.BlockPlaceEvent;
+import org.spongepowered.api.block.BlockSnapshot;
+import org.spongepowered.api.data.Transaction;
+import org.spongepowered.api.event.Listener;
+import org.spongepowered.api.event.Order;
+import org.spongepowered.api.event.block.ChangeBlockEvent;
+import org.spongepowered.api.event.filter.IsCancelled;
+import org.spongepowered.api.util.Tristate;
+import org.spongepowered.api.world.World;
 
-
-public class BlockPlaceListener implements Listener 
-{
-	@EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
-	public void onBlockPlace(BlockPlaceEvent event)
+public class BlockPlaceListener {
+	@Listener(order = Order.PRE)
+	@IsCancelled(Tristate.UNDEFINED)
+	public void onBlockPlace(ChangeBlockEvent.Place event)
 	{
-		Location loc = event.getBlockPlaced().getLocation();
-		if (loc == null) return;
-	
-		World world = loc.getWorld();
-		if (world == null) return;
-		BorderData border = Config.Border(world.getName());
-		if (border == null) return;
-		
-		if (!border.insideBorder(loc.getX(), loc.getZ(), Config.ShapeRound())) 
-		{
-			event.setCancelled(true);
+		for (Transaction<BlockSnapshot> transaction: event.getTransactions()) {
+			transaction.getOriginal().getLocation().ifPresent(loc -> {
+
+				World world = loc.getExtent();
+				BorderData border = Config.Border(world.getName());
+				if (border == null)
+					return;
+
+				if (!border.insideBorder(loc.getX(), loc.getZ(), Config.ShapeRound())) {
+					transaction.setValid(false);
+				}
+			});
 		}
-	}
-
-	public void unregister() 
-	{
-		HandlerList.unregisterAll(this);
 	}
 }
